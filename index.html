@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Retro Communications Printer</title>
+<style>
+:root{--case:#414441;--dark:#252725;--metal:#6b6e6a;--paper:#eee6d2;--ink:#28251f}
+*{box-sizing:border-box} body{margin:0;background:#202220;color:#eee;font-family:system-ui,sans-serif;display:flex;justify-content:center;padding:22px}
+.machine{width:min(760px,100%);background:linear-gradient(145deg,#555855,#292b29);border:2px solid #777a76;border-radius:20px;padding:20px;box-shadow:0 12px 30px #0008,inset 0 2px #999}
+.header{display:flex;justify-content:space-between;align-items:center;font:700 13px monospace;letter-spacing:.12em;margin-bottom:13px}
+.lamp{display:inline-block;width:10px;height:10px;border-radius:50%;background:#777;margin-right:8px}.lamp.on{background:#eee;box-shadow:0 0 12px #fff}
+.paperbox{background:#c5c0b1;padding:10px;border-radius:5px}.paper{height:310px;overflow:hidden;padding:16px;background:repeating-linear-gradient(#eee6d2 0,#eee6d2 27px,#ddd5c0 28px);color:var(--ink);font:15px/28px "Courier New",monospace;box-shadow:inset 0 0 15px #0004}
+.line{white-space:pre-wrap}.headrail{height:32px;margin-top:6px;background:#555955;border-radius:5px;border-top:2px solid #888;position:relative;overflow:hidden}.ball{position:absolute;top:3px;left:0;width:31px;height:24px;border-radius:50%;background:radial-gradient(circle at 35% 28%,#aaa,#555 60%,#292b2a);box-shadow:0 2px 4px #0008}
+.controls{display:flex;gap:9px;flex-wrap:wrap;margin-top:13px}.controls button{min-height:46px;padding:9px 14px;border:1px solid #858985;border-radius:8px;background:#575a57;color:white;font:13px monospace}.controls button:focus{outline:3px solid #bbb;outline-offset:2px}.status{font:12px monospace;color:#ddd;margin-top:10px;min-height:18px}.cursor{display:inline-block;width:8px;height:17px;background:#28251f;vertical-align:-3px;animation:blink 1s steps(1) infinite}@keyframes blink{50%{opacity:0}}
+</style>
+</head>
+<body>
+<main class="machine">
+<div class="header"><span><span id="lamp" class="lamp on"></span>COMMUNICATIONS PRINTER</span><span id="mode">AUTO</span></div>
+<div class="paperbox"><div id="paper" class="paper">
+<div class="line">SYSTEM READY.</div><div class="line">COMMUNICATIONS LINK ESTABLISHED.</div><div class="line"><span class="cursor"></span></div>
+</div></div>
+<div class="headrail"><div id="ball" class="ball"></div></div>
+<div class="controls">
+<button id="sound">SOUND ON</button><button id="print">PRINT NOW</button>
+<button id="pause">PAUSE AUTO</button><button id="clear">CLEAR PAPER</button>
+</div>
+<div id="status" class="status">Tap SOUND ON once to enable the mechanical sounds.</div>
+</main>
+<script>
+(()=> {
+const paper=document.querySelector('#paper'),ball=document.querySelector('#ball'),status=document.querySelector('#status');
+const soundBtn=document.querySelector('#sound'),printBtn=document.querySelector('#print'),pauseBtn=document.querySelector('#pause');
+const lamp=document.querySelector('#lamp'),mode=document.querySelector('#mode');
+let soundOn=false,active=true,lastMinute=-1,typing=null,audio=null;
+
+function audioReady(){
+  if(!audio) audio=new (window.AudioContext||window.webkitAudioContext)();
+  if(audio.state==='suspended') audio.resume();
+}
+function tone(freq,dur,type='square',gain=.035){
+  if(!soundOn)return;
+  audioReady(); const o=audio.createOscillator(),g=audio.createGain();
+  o.type=type;o.frequency.value=freq;g.gain.value=gain;o.connect(g);g.connect(audio.destination);
+  const now=audio.currentTime;g.gain.setValueAtTime(gain,now);g.gain.exponentialRampToValueAtTime(.001,now+dur);
+  o.start(now);o.stop(now+dur);
+}
+function ding(){ if(!soundOn)return; audioReady(); tone(880,.12,'sine',.06);setTimeout(()=>tone(660,.22,'sine',.05),90); }
+function clickSound(){tone(95,.025,'square',.025)}
+function printLine(){
+ if(typing)clearInterval(typing);
+ const d=new Date(), time=d.toLocaleTimeString('en-GB'), date=d.toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'});
+ const text='THE CURRENT TIME IS '+time+'.   DATE '+date+'.';
+ const line=document.createElement('div');line.className='line';paper.appendChild(line);
+ while(paper.children.length>10)paper.removeChild(paper.firstChild);
+ let i=0;status.textContent='PRINTING…';ball.style.left='0%';clickSound();
+ typing=setInterval(()=>{
+   if(i<text.length){line.textContent=text.slice(0,++i);ball.style.left=Math.min(96,(i/text.length)*96)+'%';if(i%2===0)clickSound();}
+   else{clearInterval(typing);typing=null;status.textContent='TRANSMISSION COMPLETE — '+time;ball.style.left='96%';ding();}
+ },34);
+}
+function check(){
+ if(!active)return;const m=new Date().getMinutes();
+ if(m!==lastMinute){lastMinute=m;printLine();}
+}
+soundBtn.onclick=()=>{audioReady();soundOn=!soundOn;soundBtn.textContent=soundOn?'SOUND OFF':'SOUND ON';status.textContent=soundOn?'Mechanical audio enabled. Awaiting transmission…':'Mechanical audio disabled.';if(soundOn)ding()};
+printBtn.onclick=()=>{audioReady();lastMinute=new Date().getMinutes();printLine()};
+pauseBtn.onclick=()=>{active=!active;pauseBtn.textContent=active?'PAUSE AUTO':'RESUME AUTO';lamp.classList.toggle('on',active);mode.textContent=active?'AUTO':'PAUSED';status.textContent=active?'Awaiting next one-minute transmission…':'Automatic printing paused.'};
+document.querySelector('#clear').onclick=()=>{paper.innerHTML='<div class="line">PAPER CLEARED.</div><div class="line">SYSTEM READY.<span class="cursor"></span></div>';status.textContent='Paper cleared — system ready.';clickSound()};
+setInterval(check,1000);check();
+})();
+</script>
+</body>
+</html>
